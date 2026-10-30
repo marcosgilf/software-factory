@@ -9,6 +9,11 @@ import {
 } from '@earendil-works/pi-durable';
 import { fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { openAgentHarness } from '../../src/harness.js';
+import {
+  MOCK_OPERATION_KEY,
+  MOCK_RECEIPT_PREFIX,
+  RECOVERY_WORKER_MODE,
+} from './recovery-protocol.js';
 
 type EffectState = { phase: 'reconcile'; key: string };
 type RemoteState = {
@@ -19,7 +24,9 @@ type RemoteState = {
 };
 
 const [mode, databasePath, remotePath, existingTaskId] = process.argv.slice(2);
-if (mode !== 'crash' && mode !== 'resume') throw new Error(`Unknown worker mode: ${mode}`);
+if (mode !== RECOVERY_WORKER_MODE.crash && mode !== RECOVERY_WORKER_MODE.resume) {
+  throw new Error(`Unknown worker mode: ${mode}`);
+}
 if (databasePath === undefined || remotePath === undefined)
   throw new Error('Worker paths are required.');
 
@@ -44,7 +51,7 @@ const remote = {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
 
-    const receipt = `receipt-${key}`;
+    const receipt = `${MOCK_RECEIPT_PREFIX}${key}`;
     state.createCalls += 1;
     if (state.records[key] === undefined) {
       state.records[key] = receipt;
@@ -71,7 +78,7 @@ const ReconcileEffect = defineTask<
 
       // Exit after the remote write to leave SQLite at the prior checkpoint,
       // reproducing a process loss before the completion commit.
-      if (mode === 'crash' && knownReceipt === undefined) process.exit(73);
+      if (mode === RECOVERY_WORKER_MODE.crash && knownReceipt === undefined) process.exit(73);
 
       await runtime.commit(
         () => ({
@@ -95,14 +102,14 @@ models.setProvider(faux.provider);
 const harness = await openAgentHarness(databasePath, { models, registry }, context);
 
 try {
-  if (mode === 'crash') {
+  if (mode === RECOVERY_WORKER_MODE.crash) {
     const taskId = await (
       await harness.root(context)
     ).commit(
       (tx) =>
         tx.createTask(
           ReconcileEffect,
-          { key: 'issue-3-mock-write' },
+          { key: MOCK_OPERATION_KEY },
           { ownership: { kind: 'conversation' } },
         ),
       context,

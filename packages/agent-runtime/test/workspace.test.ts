@@ -26,6 +26,7 @@ describe('per-conversation execution environments', () => {
       const registry = createRegistry();
       registry.install(CodingTools);
       const faux = fauxProvider();
+      const fauxModel = faux.models[0];
       const write = (content: string) =>
         fauxAssistantMessage(fauxToolCall('write', { path: 'note.txt', content }), {
           stopReason: 'toolUse',
@@ -43,7 +44,7 @@ describe('per-conversation execution environments', () => {
       const conversationIds = await (async () => {
         const harness = await openAgentHarness(databasePath, options, context);
         try {
-          const model = { provider: 'faux', modelId: 'faux-1' };
+          const model = { provider: fauxModel.provider, modelId: fauxModel.id };
           const makeConversation = async (cwd: string) =>
             harness.createConversation(
               {

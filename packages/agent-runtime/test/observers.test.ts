@@ -11,6 +11,7 @@ import {
   createRegistry,
   defineExtension,
   defineTool,
+  LiveDoc,
   type LiveState,
 } from '@earendil-works/pi-durable';
 import { describe, expect, it } from 'vitest';
@@ -18,6 +19,8 @@ import { openAgentHarness } from '../src/harness.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+const PAUSE_TOOL_NAME = 'pause';
 
 describe('Pi Durable late observers', () => {
   it('gives a joining observer the current state and later task updates', async () => {
@@ -38,7 +41,7 @@ describe('Pi Durable late observers', () => {
         name: 'factory.test.pause',
         tools: [
           defineTool({
-            name: 'pause',
+            name: PAUSE_TOOL_NAME,
             description: 'Wait until a test observer attaches.',
             parameters: Type.Object({}),
             execute: async () => {
@@ -52,8 +55,9 @@ describe('Pi Durable late observers', () => {
     );
 
     const faux = fauxProvider();
+    const fauxModel = faux.models[0];
     faux.setResponses([
-      fauxAssistantMessage([fauxToolCall('pause', {}, { id: 'pause-call' })], {
+      fauxAssistantMessage([fauxToolCall(PAUSE_TOOL_NAME, {}, { id: 'pause-call' })], {
         stopReason: 'toolUse',
       }),
       fauxAssistantMessage(fauxText('Finished after the observer joined.')),
@@ -68,7 +72,7 @@ describe('Pi Durable late observers', () => {
         context,
       );
       const conversation = await harness.root(context, {
-        agent: { model: { provider: 'faux', modelId: 'faux-1' } },
+        agent: { model: { provider: fauxModel.provider, modelId: fauxModel.id } },
       });
       const submission = await conversation.submit(
         { type: 'input', content: 'Pause while I join.' },
@@ -78,11 +82,11 @@ describe('Pi Durable late observers', () => {
 
       const watch = await conversation.watch(context);
       stopWatch = () => watch.stop();
-      const initialState = watch.value.docs['pi.live'] as LiveState;
+      const initialState = watch.value.docs[LiveDoc.definition.kind] as LiveState;
       expect(initialState.run).toBeDefined();
 
       watch.start(async (value) => {
-        const live = value.docs['pi.live'] as LiveState;
+        const live = value.docs[LiveDoc.definition.kind] as LiveState;
         if (live.run === undefined) signalFinished();
       });
 

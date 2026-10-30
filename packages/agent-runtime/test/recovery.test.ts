@@ -4,6 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import {
+  MOCK_OPERATION_KEY,
+  MOCK_RECEIPT_PREFIX,
+  RECOVERY_WORKER_MODE,
+} from './fixtures/recovery-protocol.js';
 
 const workerPath = fileURLToPath(new URL('./fixtures/recovery-worker.ts', import.meta.url));
 
@@ -32,12 +37,17 @@ describe('Pi Durable recovery', () => {
         remotePath,
         JSON.stringify({ records: {}, lookupCalls: 0, createCalls: 0, effects: 0 }),
       );
-      const firstRun = await runWorker(['crash', databasePath, remotePath]);
+      const firstRun = await runWorker([RECOVERY_WORKER_MODE.crash, databasePath, remotePath]);
       expect(firstRun.code, firstRun.stderr).toBe(73);
       const taskId = firstRun.stdout.match(/^TASK:(.+)$/m)?.[1];
       expect(taskId).toBeDefined();
 
-      const resumed = await runWorker(['resume', databasePath, remotePath, taskId!]);
+      const resumed = await runWorker([
+        RECOVERY_WORKER_MODE.resume,
+        databasePath,
+        remotePath,
+        taskId!,
+      ]);
       expect(resumed.code, resumed.stderr).toBe(0);
       expect(resumed.stdout).toContain('"reconciled":true');
 
@@ -50,7 +60,9 @@ describe('Pi Durable recovery', () => {
       expect(remote.lookupCalls).toBe(2);
       expect(remote.createCalls).toBe(1);
       expect(remote.effects).toBe(1);
-      expect(remote.records['issue-3-mock-write']).toBe('receipt-issue-3-mock-write');
+      expect(remote.records[MOCK_OPERATION_KEY]).toBe(
+        `${MOCK_RECEIPT_PREFIX}${MOCK_OPERATION_KEY}`,
+      );
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
