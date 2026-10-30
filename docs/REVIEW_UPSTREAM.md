@@ -1,0 +1,17 @@
+# Upstream implementation review
+
+## References
+
+- [Pi Durable examples](https://github.com/earendil-works/pi/tree/main/packages/durable/test/examples): native `defineTask` checkpointing, SQLite reopen, late-join watch, coding tools, per-conversation ExecutionEnv.
+- [durable-pi](https://github.com/disler/durable-pi): device-owned backend and thin remote clients; adopt stable session/device API and reconnection, defer multi-device federation.
+- [pi-durable-news-agent](https://github.com/disler/pi-durable-news-agent): event-triggered proactive workflows with deterministic gates and agent judgment; avoid premature distributed scheduling.
+
+## Acceptance examples
+
+- `11-tasks.ts`: durable phase transitions.
+- `12-recovery.ts`: reopen SQLite and resume, with replay-safe effects.
+- `20-late-join.ts`: attach while task runs and obtain current view.
+- `25-coding-agent.ts`: working-directory-aware coding tools.
+- `28-sandbox-per-conversation.ts`: select ExecutionEnv by conversation; note directory isolation is insufficient for security.
+
+Do not copy example applications as production security baselines. Verify current upstream API before integration.
