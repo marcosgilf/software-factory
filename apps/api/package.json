@@ -1,0 +1,20 @@
+{
+  "name": "@factory/api",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/app.d.ts",
+      "import": "./dist/app.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@factory/contracts": "workspace:*",
+    "@hono/node-server": "^1.13.8",
+    "hono": "^4.7.0"
+  }
+}
