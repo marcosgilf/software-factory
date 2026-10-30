@@ -199,6 +199,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@factory/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
       '@factory/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -208,8 +211,22 @@ importers:
       hono:
         specifier: ^4.13.14
         version: 4.13.14
+    devDependencies:
+      '@earendil-works/chord':
+        specifier: 1.4.0
+        version: 1.4.0
+      '@earendil-works/pi-ai':
+        specifier: 1.4.0
+        version: 1.4.0(@aws-sdk/credential-provider-node@3.972.90)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@3.25.76)
+      '@earendil-works/pi-durable':
+        specifier: 1.4.0
+        version: 1.4.0(@aws-sdk/credential-provider-node@3.972.90)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@3.25.76)
 
   apps/web:
+    dependencies:
+      '@factory/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
     devDependencies:
       '@astrojs/check':
         specifier: ^0.9.12
@@ -223,16 +240,18 @@ importers:
 
   packages/agent-runtime:
     dependencies:
+      '@earendil-works/pi-ai':
+        specifier: 1.4.0
+        version: 1.4.0(@aws-sdk/credential-provider-node@3.972.90)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@3.25.76)
       '@earendil-works/chord':
         specifier: 1.4.0
         version: 1.4.0
       '@earendil-works/pi-durable':
         specifier: 1.4.0
         version: 1.4.0(@aws-sdk/credential-provider-node@3.972.90)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@3.25.76)
-    devDependencies:
-      '@earendil-works/pi-ai':
-        specifier: 1.4.0
-        version: 1.4.0(@aws-sdk/credential-provider-node@3.972.90)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@3.25.76)
+      '@factory/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/contracts: {}
 

@@ -8,12 +8,184 @@ import { site } from '../lib/site.js';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={site.description} />
-    <title>{site.title}</title>
+    <title>{site.title} — Inspector</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        background: #f5f6f8;
+        color: #17202b;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 3rem 1.25rem 5rem;
+      }
+      h1,
+      h2,
+      p {
+        margin-top: 0;
+      }
+      h1 {
+        margin-bottom: 0.4rem;
+      }
+      .intro,
+      .muted {
+        color: #536171;
+      }
+      .panel {
+        margin-top: 1.5rem;
+        padding: 1.25rem;
+        border: 1px solid #d8dde5;
+        border-radius: 0.75rem;
+        background: white;
+      }
+      .connection-grid {
+        display: grid;
+        grid-template-columns: minmax(16rem, 2fr) minmax(15rem, 2fr) auto;
+        gap: 1rem;
+        align-items: end;
+      }
+      label {
+        display: grid;
+        gap: 0.4rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+      input,
+      select,
+      button {
+        min-height: 2.7rem;
+        box-sizing: border-box;
+        border: 1px solid #abb5c1;
+        border-radius: 0.4rem;
+        padding: 0.55rem 0.7rem;
+        font: inherit;
+      }
+      button {
+        border-color: #203852;
+        background: #203852;
+        color: white;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+      .session-controls {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 1rem;
+        align-items: end;
+      }
+      .session-heading {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: baseline;
+      }
+      .status {
+        font-weight: 700;
+        text-transform: capitalize;
+      }
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+      }
+      th,
+      td {
+        padding: 0.75rem 0.5rem;
+        border-bottom: 1px solid #e5e8ed;
+      }
+      th {
+        color: #536171;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      code {
+        overflow-wrap: anywhere;
+      }
+      #message {
+        min-height: 1.5rem;
+        margin: 0.75rem 0 0;
+        color: #8a2d26;
+      }
+      @media (max-width: 720px) {
+        main {
+          padding-top: 2rem;
+        }
+        .connection-grid,
+        .session-controls {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
   </head>
   <body>
     <main>
       <h1>{site.title}</h1>
-      <p>{site.description}</p>
+      <p class="intro">Inspect durable sessions and task state. This page does not display transcripts or task payloads.</p>
+
+      <section class="panel" aria-labelledby="connection-title">
+        <h2 id="connection-title">Device connection</h2>
+        <form id="connection-form" class="connection-grid">
+          <label for="api-url">
+            API URL
+            <input id="api-url" type="url" value="http://localhost:3000" required />
+          </label>
+          <label for="api-token">
+            Device API token
+            <input id="api-token" type="password" autocomplete="off" required />
+          </label>
+          <button id="connect-button" type="submit">Connect</button>
+        </form>
+        <p class="muted">The token stays in memory for this tab and is sent as a bearer token to the API URL above.</p>
+        <p id="message" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel" aria-labelledby="sessions-title">
+        <div class="session-controls">
+          <label for="session-select">
+            <span id="sessions-title">Session</span>
+            <select id="session-select" disabled>
+              <option value="">Connect to load sessions</option>
+            </select>
+          </label>
+          <button id="create-session" type="button" disabled>Create session</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="tasks-title">
+        <div class="session-heading">
+          <h2 id="tasks-title">Tasks</h2>
+          <p class="muted">Session status: <span id="session-status" class="status">—</span></p>
+        </div>
+        <p id="session-id" class="muted">Choose a session to inspect its durable task summaries.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th scope="col">Task</th><th scope="col">Kind</th><th scope="col">Status</th><th scope="col">Started</th></tr>
+            </thead>
+            <tbody id="task-list">
+              <tr><td colspan="4" class="muted">No session selected.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
+    <script>
+      import { connectInspector } from '../scripts/inspector.js';
+
+      connectInspector(document);
+    </script>
   </body>
 </html>

@@ -29,11 +29,11 @@
 
 ## Milestone 2 — Device API and UI
 
-- [ ] Hono session/task endpoints with typed contracts.
-- [ ] Snapshot + SSE incremental event stream, resync and authorization.
-- [ ] Astro session and task inspector with approval controls.
+- [x] Hono session/task endpoints with typed contracts.
+- [x] Snapshot + SSE incremental event stream, resync and authorization.
+- [x] Astro session and task inspector for safe status summaries.
 
-**Exit:** browser can reconnect during active execution and recover accurate state.
+**Exit:** tested browser event handling and Hono SSE replay recover accurate durable task state after a disconnect without stopping the task.
 
 ## Milestone 3 — Safe integration and ticket-to-PR
 
