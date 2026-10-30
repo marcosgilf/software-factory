@@ -19,13 +19,13 @@
 
 ## Milestone 1 — Durable runtime spike (priority)
 
-- [ ] Pin and verify a compatible Pi Durable version/API.
-- [ ] Reproduce upstream task, recovery and late-join examples using offline/faux model.
-- [ ] SQLite persisted task survives process restart.
-- [ ] Reopen session and reconnect client without duplicate side effects.
-- [ ] Per-conversation execution environment with explicit isolation limitations.
+- [x] Pin and verify Pi Durable 1.4.0 and its Node 22.19+ API.
+- [x] Reproduce native task and late-join patterns with the offline/faux model.
+- [x] SQLite-persisted task survives process restart.
+- [x] Reopen session and reconcile an existing external effect by idempotency key.
+- [x] Resolve a per-conversation execution environment and document its security limits.
 
-**Exit:** automated crash/restart test proves resumed progress and no duplicate external write under an idempotent mock adapter.
+**Exit:** automated crash/restart tests prove resumed progress and one mock external write after reconciliation.
 
 ## Milestone 2 — Device API and UI
 

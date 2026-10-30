@@ -5,7 +5,7 @@ repository is the implementation source of truth.
 
 ## Development
 
-Requires Node.js 22.12 or later and pnpm 11.25.0.
+Requires Node.js 22.19 or later and pnpm 11.25.0.
 
 ```sh
 pnpm install
@@ -25,7 +25,7 @@ port.
 | `pnpm format:check`        | Check formatting without changing files                          |
 | `pnpm check:dependencies`  | Check workspace dependency ranges for newer patch/minor releases |
 | `pnpm update:dependencies` | Update workspace dependency ranges to newer patch/minor releases |
-| `pnpm test`                | Run Vitest smoke tests                                           |
+| `pnpm test`                | Run Vitest unit and SQLite recovery tests                        |
 
 Dependency commands cover the root and all pnpm workspaces, excluding the pinned package manager.
 They stay within the current major version; major upgrades need a deliberate change. After
@@ -38,7 +38,7 @@ messages as well.
 - `apps/web` — Astro browser client
 - `apps/api` — Hono API and server entry point
 - `packages/contracts` — shared API types
-- `packages/agent-runtime` — runtime type boundary
+- `packages/agent-runtime` — Pi Durable SQLite harness, recovery and conversation workspaces
 - `packages/integrations` — integration type boundary
 - `packages/workflows` — workflow type boundary
 
@@ -50,6 +50,7 @@ public entry point. The workspace uses pnpm scripts and does not use Turborepo.
 
 - [Architecture](ARCHITECTURE.md)
 - [Implementation plan](PLAN.md)
+- [Durable runtime spike](docs/DURABLE_RUNTIME.md)
 - [Security](docs/SECURITY.md)
 - [Testing](docs/TESTING.md)
 - [Upstream references](docs/REVIEW_UPSTREAM.md)
