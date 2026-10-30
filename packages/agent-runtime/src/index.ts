@@ -6,3 +6,11 @@ export interface SessionSummary {
   readonly id: SessionId;
   readonly status: 'idle' | 'running' | 'paused' | 'completed' | 'failed';
 }
+
+export { openAgentHarness } from './harness.js';
+export type { AgentHarness } from './harness.js';
+export {
+  assignConversationWorkspace,
+  conversationWorkspaceDoc,
+  nodeExecutionEnvForConversation,
+} from './workspace.js';

@@ -25,6 +25,8 @@ A local-first Software Factory running on a MacBook, remotely accessible through
 
 One Hono backend process on the MacBook owns the session catalog and each active Pi Durable harness. Sessions have independent durable SQLite state; catalog and session ownership are explicit. The web UI is a thin client. Do not introduce horizontal scaling with shared SQLite.
 
+The initial runtime pins `@earendil-works/pi-durable` 1.4.0 and uses its Node SQLite adapter. Each conversation's working directory is persisted in conversation metadata and resolved to an `ExecutionEnv` for tool use. This directory mapping does not provide process or secret isolation.
+
 On client connection: return a consistent initial snapshot, then stream incremental updates with reconnect/resync behavior. A dropped SSE connection must not cancel a durable task. Define stable event IDs and replay/resync semantics before implementing the reducer.
 
 ## Workflows

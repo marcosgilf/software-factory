@@ -15,3 +15,9 @@
 - `28-sandbox-per-conversation.ts`: select ExecutionEnv by conversation; note directory isolation is insufficient for security.
 
 Do not copy example applications as production security baselines. Verify current upstream API before integration.
+
+## M1 verification
+
+- Pin `@earendil-works/pi-durable` and its companion `@earendil-works/chord` / `@earendil-works/pi-ai` packages to 1.4.0. The published package metadata requires Node.js 22.19 or later.
+- The integration uses the published `Harness.open`, `openNodeSqliteStorage`, `defineTask`, `runtime.commit`, `Conversation.watch` and `ExecutionEnv` types. The offline faux provider and the Node SQLite adapter are exercised in tests; no provider credentials are required.
+- Upstream examples establish the recovery and late-join patterns. Local tests additionally force a child process to exit after the mock remote write and before the final SQLite commit, then reopen the same SQLite file and reconcile by idempotency key.
