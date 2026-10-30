@@ -9,5 +9,8 @@ outside that graph and runs `astro check` and `astro build` through its own pack
 
 Local package dependencies use `workspace:*`; library packages expose explicit `exports` maps.
 Oxlint, Oxfmt, and Lefthook provide local quality checks, and GitHub Actions runs the same checks on
-pull requests and pushes to `main`. Use pnpm directly for workspace scripts; defer Turborepo until
-there is a measured need for task caching or orchestration.
+pull requests and pushes to `main`. npm-check-updates checks and updates dependency ranges across
+the root and workspaces, limited to patch/minor updates; CI fails when a compatible update is
+available. Commitlint applies Conventional Commits rules to local commits through Lefthook and to
+pull request commits in CI. Use pnpm directly for workspace scripts; defer Turborepo until there is
+a measured need for task caching or orchestration.

@@ -12,7 +12,9 @@ is completed.
   app outside that graph; run `astro check` and `astro build` through its package scripts.
 - Keep package entry points explicit in each library's `exports` map. Do not add Turborepo.
 - Before opening a PR, run `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm build`, and
-  `pnpm test`.
+  `pnpm test` and `pnpm check:dependencies`.
+- Use Conventional Commit messages. Lefthook runs commitlint locally, and CI checks pull request
+  commits.
 
 ## Security and scope
 

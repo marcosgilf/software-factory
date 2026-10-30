@@ -39,7 +39,7 @@ ExecutionEnv is an abstraction, not a sandbox guarantee. A separate working dire
 
 ## Monorepo boundaries
 
-pnpm workspaces, `workspace:*` dependencies, TypeScript project references (`tsc --build`) for buildable packages and Hono API; Astro uses `astro check`/`astro build` outside the root solution graph. Explicit package exports and lint/dependency rules enforce import boundaries; TS references only establish build order and incremental compilation. Oxlint, Oxfmt and Lefthook; no Turborepo.
+pnpm workspaces, `workspace:*` dependencies, TypeScript project references (`tsc --build`) for buildable packages and Hono API; Astro uses `astro check`/`astro build` outside the root solution graph. Explicit package exports and lint/dependency rules enforce import boundaries; TS references only establish build order and incremental compilation. Oxlint, Oxfmt, and Lefthook provide local quality gates. npm-check-updates checks and updates patch/minor dependency ranges across the root and workspaces, with CI checking for drift. Commitlint enforces Conventional Commits through Lefthook and CI. Do not add Turborepo.
 
 ## Observability
 
