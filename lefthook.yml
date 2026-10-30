@@ -2,3 +2,7 @@ pre-commit:
   commands:
     quality:
       run: pnpm lint && pnpm format:check
+commit-msg:
+  commands:
+    conventional-commit:
+      run: pnpm exec commitlint --edit {1}

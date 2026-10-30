@@ -9,6 +9,14 @@
 
 **Exit:** clean install, build, typecheck, lint, format check and tests pass on CI.
 
+## Milestone 0.1 — Dependency and commit hygiene
+
+- [x] Add npm-check-updates scripts for checking/updating root and workspace dependency ranges.
+- [x] Enforce Conventional Commits with commitlint in Lefthook and GitHub Actions.
+- [x] Document the update workflow and keep architecture guidance current.
+
+**Exit:** CI dependency drift check passes, and invalid commit messages are rejected.
+
 ## Milestone 1 — Durable runtime spike (priority)
 
 - [ ] Pin and verify a compatible Pi Durable version/API.

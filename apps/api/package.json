@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@factory/contracts": "workspace:*",
-    "@hono/node-server": "^1.13.8",
-    "hono": "^4.7.0"
+    "@hono/node-server": "^1.19.17",
+    "hono": "^4.13.14"
   }
 }
