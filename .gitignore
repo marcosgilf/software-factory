@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.astro/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+pnpm-debug.log

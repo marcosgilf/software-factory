@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/contracts" },
+    { "path": "./packages/agent-runtime" },
+    { "path": "./packages/integrations" },
+    { "path": "./packages/workflows" },
+    { "path": "./apps/api" }
+  ]
+}

@@ -2,10 +2,10 @@
 
 ## Milestone 0 — Repository foundation
 
-- [ ] pnpm TypeScript workspace with `apps/web`, `apps/api`, and four packages.
-- [ ] TS solution references and buildable package configurations.
-- [ ] Astro and Hono smoke tests; Oxlint, Oxfmt, Lefthook; GitHub Actions CI.
-- [ ] ADRs and `AGENTS.md` kept current.
+- [x] pnpm TypeScript workspace with `apps/web`, `apps/api`, and four packages.
+- [x] TS solution references and buildable package configurations.
+- [x] Astro and Hono smoke tests; Oxlint, Oxfmt, Lefthook; GitHub Actions CI.
+- [x] ADRs and `AGENTS.md` kept current.
 
 **Exit:** clean install, build, typecheck, lint, format check and tests pass on CI.
 
