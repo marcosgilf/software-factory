@@ -25,7 +25,7 @@ port.
 | `pnpm format:check`        | Check formatting without changing files                          |
 | `pnpm check:dependencies`  | Check workspace dependency ranges for newer patch/minor releases |
 | `pnpm update:dependencies` | Update workspace dependency ranges to newer patch/minor releases |
-| `pnpm test`                | Run Vitest unit and SQLite recovery tests                        |
+| `pnpm test`                | Run Vitest unit, API/SSE and SQLite recovery tests               |
 
 Dependency commands cover the root and all pnpm workspaces, excluding the pinned package manager.
 They stay within the current major version; major upgrades need a deliberate change. After
@@ -51,6 +51,7 @@ public entry point. The workspace uses pnpm scripts and does not use Turborepo.
 - [Architecture](ARCHITECTURE.md)
 - [Implementation plan](PLAN.md)
 - [Durable runtime spike](docs/DURABLE_RUNTIME.md)
+- [Device API and inspector](docs/DEVICE_API.md)
 - [Security](docs/SECURITY.md)
 - [Testing](docs/TESTING.md)
 - [Upstream references](docs/REVIEW_UPSTREAM.md)

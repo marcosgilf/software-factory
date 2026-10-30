@@ -13,8 +13,14 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@factory/agent-runtime": "workspace:*",
     "@factory/contracts": "workspace:*",
     "@hono/node-server": "^1.19.17",
     "hono": "^4.13.14"
+  },
+  "devDependencies": {
+    "@earendil-works/chord": "1.4.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-durable": "1.4.0"
   }
 }
