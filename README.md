@@ -5,7 +5,7 @@ repository is the implementation source of truth.
 
 ## Development
 
-Requires Node.js 22.19 or later and pnpm 11.25.0.
+Requires Node.js 26.13.0 or later and pnpm 12.16.1.
 
 ```sh
 pnpm install
