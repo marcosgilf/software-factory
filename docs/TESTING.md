@@ -8,7 +8,8 @@
 - Commit messages: the Lefthook `commit-msg` hook and CI use commitlint with the Conventional
   Commits ruleset.
 - Unit: contracts, task transitions, deduplication and policy decisions.
-- Integration: Pi Durable SQLite open/reopen, a child-process crash and task resume, late observer snapshots, per-conversation work directories, event snapshots, SSE reconnect and mock CLI adapters.
+- Integration: Pi Durable SQLite open/reopen, a child-process crash and task resume, late observer snapshots, per-conversation work directories, authenticated Hono session/task endpoints, SSE disconnect/replay during a running task and safe-payload checks.
+- Browser client: chunked SSE parsing, snapshot/resync handling and rejection of stale or cross-session updates.
 - Failure injection: crash before/after external write and before/after checkpoint; reconcile without duplicate PR or issue.
 - Security: agent shell cannot read PATs; unauthorized sessions and writes denied; no sensitive logs.
 - End-to-end: ticket -> approved PR with deterministic fake model before live model credentials.

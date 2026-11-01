@@ -27,7 +27,9 @@ One Hono backend process on the MacBook owns the session catalog and each active
 
 The initial runtime pins `@earendil-works/pi-durable` 1.4.0 and uses its Node SQLite adapter. Each conversation's working directory is persisted in conversation metadata and resolved to an `ExecutionEnv` for tool use. This directory mapping does not provide process or secret isolation.
 
-On client connection: return a consistent initial snapshot, then stream incremental updates with reconnect/resync behavior. A dropped SSE connection must not cancel a durable task. Define stable event IDs and replay/resync semantics before implementing the reducer.
+On client connection: return a consistent initial snapshot, then stream complete safe snapshots when visible state changes. A dropped SSE connection removes only that observer; it must not cancel a durable task. Event IDs carry a server-process epoch, session ID and sequence. The API keeps a bounded replay window and sends a resync snapshot for an unknown, expired or previous-process cursor. The browser reducer accepts snapshots and only applies forward revisions.
+
+The device API uses one server-configured bearer token to protect all session routes. The token is distinct from provider credentials and GitHub PATs. The Astro inspector holds the token in tab memory and uses authenticated `fetch` streaming so it can send `Last-Event-ID` when reconnecting. API payloads contain safe summaries, never task input, checkpoint, outcome, transcript, credential or error details.
 
 ## Workflows
 

@@ -7,3 +7,5 @@ allowBuilds:
   lefthook: true
   protobufjs: false
   sharp: true
+minimumReleaseAgeExclude:
+  - hono@4.13.16
