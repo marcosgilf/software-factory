@@ -16,7 +16,7 @@
     "@factory/agent-runtime": "workspace:*",
     "@factory/contracts": "workspace:*",
     "@hono/node-server": "^1.19.17",
-    "hono": "^4.13.14"
+    "hono": "^4.13.16"
   },
   "devDependencies": {
     "@earendil-works/chord": "1.4.0",
