@@ -7,5 +7,5 @@
 - Require explicit approval and remote reconciliation for non-idempotent writes.
 - Redact logs, tool outputs and telemetry; never stream secrets to the browser.
 - The inspector keeps the device token in tab memory, sends it only in the `Authorization` header, and does not persist it. API logs exclude headers and query strings; task summaries omit inputs, checkpoints, outcomes and error payloads.
-- Restrict remote access (private networking initially), validate webhook signatures, apply rate limits and CSRF protections where relevant.
+- Bind the device API to loopback by default. For remote access, require HTTPS or an encrypted tunnel; never send its bearer token over non-loopback HTTP. Validate webhook signatures, apply rate limits and CSRF protections where relevant.
 - Test prompt injection, path traversal, cross-session access, replay and crash windows.

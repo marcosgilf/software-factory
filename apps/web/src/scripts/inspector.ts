@@ -5,7 +5,13 @@ import type {
   SessionSnapshot,
   TaskSummary,
 } from '@factory/contracts';
-import { applySessionEvent, parseSessionEvent, parseSseFrames } from '../lib/inspector.js';
+import {
+  applySessionEvent,
+  parseSessionEvent,
+  parseSseFrames,
+  reconnectSchedule,
+  resolveApiBase,
+} from '../lib/inspector.js';
 
 interface ApiErrorBody {
   readonly error?: { readonly message?: string };
@@ -128,6 +134,7 @@ export function connectInspector(document: Document): void {
   async function connectSession(id: SessionId): Promise<void> {
     activeStream?.abort();
     activeSessionId = id;
+    lastEventIds.delete(id);
     activeStream = new AbortController();
     clearSnapshot();
     sessionIdElement.textContent = `Session ${id}`;
@@ -137,6 +144,7 @@ export function connectInspector(document: Document): void {
   async function consumeEvents(id: SessionId, signal: AbortSignal): Promise<void> {
     let delay = 500;
     while (!signal.aborted && activeSessionId === id) {
+      let connectedAt: number | undefined;
       try {
         const headers = new Headers({
           Authorization: `Bearer ${apiToken}`,
@@ -144,13 +152,14 @@ export function connectInspector(document: Document): void {
         });
         const lastEventId = lastEventIds.get(id);
         if (lastEventId !== undefined) headers.set('Last-Event-ID', lastEventId);
-        const response = await fetch(`${apiBase()}/api/sessions/${encodeURIComponent(id)}/events`, {
-          headers,
-          signal,
-        });
+        const response = await fetch(
+          `${resolveApiBase(urlElement.value)}/api/sessions/${encodeURIComponent(id)}/events`,
+          { headers, signal },
+        );
         if (!response.ok) throw await responseError(response);
         if (response.body === null) throw new Error('The event stream was not available.');
-        delay = 500;
+        connectedAt = Date.now();
+        setMessage('Live updates connected; waiting for updates.');
 
         for await (const frame of parseSseFrames(response.body)) {
           if (signal.aborted || activeSessionId !== id) return;
@@ -165,8 +174,12 @@ export function connectInspector(document: Document): void {
         setMessage(`${errorMessage(error)} Reconnecting…`);
       }
 
-      await wait(delay, signal);
-      delay = Math.min(delay * 2, 5_000);
+      const schedule = reconnectSchedule(
+        delay,
+        connectedAt === undefined ? 0 : Date.now() - connectedAt,
+      );
+      await wait(schedule.waitMs, signal);
+      delay = schedule.nextDelayMs;
     }
   }
 
@@ -219,25 +232,14 @@ export function connectInspector(document: Document): void {
     return row;
   }
 
-  function apiBase(): string {
-    const url = new URL(urlElement.value.trim());
-    if (
-      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
-      url.username.length > 0 ||
-      url.password.length > 0 ||
-      url.search.length > 0 ||
-      url.hash.length > 0
-    ) {
-      throw new Error('Enter an HTTP(S) API URL without credentials or query parameters.');
-    }
-    return url.toString().replace(/\/$/, '');
-  }
-
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${apiToken}`);
     if (init.body !== undefined) headers.set('Content-Type', 'application/json');
-    const response = await fetch(`${apiBase()}${path}`, { ...init, headers });
+    const response = await fetch(`${resolveApiBase(urlElement.value)}${path}`, {
+      ...init,
+      headers,
+    });
     if (!response.ok) throw await responseError(response);
     return (await response.json()) as T;
   }

@@ -1,10 +1,11 @@
 # Device API and inspector
 
 The Hono API is the single process owner for the local session catalog and active Pi Durable
-harnesses. Set `FACTORY_API_TOKEN` in the API process environment before using any `/api/*` route.
+harnesses. It binds to `127.0.0.1` by default and does not terminate TLS. Set `FACTORY_API_TOKEN`
+in the API process environment before using any `/api/*` route.
 The token is a device-level access credential for the inspector; it is not a model API key or a
-GitHub PAT. Every valid token can inspect every session on that device, so keep the API on a trusted
-private network and rotate the token through the process environment.
+GitHub PAT. Every valid token can inspect every session on that device, so keep the API on loopback
+or behind encrypted remote access and rotate the token through the process environment.
 
 Session databases live in `.factory/sessions` under the API working directory by default. Set
 `FACTORY_DATA_DIR` to a dedicated private directory to store them elsewhere.
@@ -42,6 +43,8 @@ client reducer can ignore stale revisions and recover directly from a resync.
 
 The Astro client uses `fetch` instead of native `EventSource` because it must send the device bearer
 token and `Last-Event-ID` headers. The token is held only in tab memory and is never stored in
-browser storage or placed in a URL. The API allows browser origins `http://localhost:4321` and
-`http://127.0.0.1:4321` by default; set `FACTORY_ALLOWED_ORIGINS` to a comma-separated list when
-serving the inspector from a different trusted origin.
+browser storage or placed in a URL. The client allows plain HTTP only for loopback API URLs. For
+remote access, use an HTTPS reverse proxy or an encrypted tunnel that forwards to loopback; do not
+send the bearer token over non-loopback HTTP. The API allows browser origins `http://localhost:4321`
+and `http://127.0.0.1:4321` by default; set `FACTORY_ALLOWED_ORIGINS` to a comma-separated list
+when serving the inspector from a different trusted origin.

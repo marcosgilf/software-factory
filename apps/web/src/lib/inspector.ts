@@ -6,6 +6,41 @@ export interface SseFrame {
   readonly data: string;
 }
 
+const INITIAL_RECONNECT_DELAY_MS = 500;
+const MAX_RECONNECT_DELAY_MS = 5_000;
+const STABLE_STREAM_DURATION_MS = 30_000;
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+export function resolveApiBase(value: string): string {
+  const url = new URL(value.trim());
+  if (
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.username.length > 0 ||
+    url.password.length > 0 ||
+    url.search.length > 0 ||
+    url.hash.length > 0 ||
+    (url.protocol === 'http:' && !LOOPBACK_HOSTS.has(url.hostname))
+  ) {
+    throw new Error(
+      'Use HTTPS for remote API URLs. HTTP is allowed only on loopback; omit credentials, query parameters, and fragments.',
+    );
+  }
+  return url.toString().replace(/\/$/, '');
+}
+
+export function reconnectSchedule(
+  currentDelayMs: number,
+  streamDurationMs: number,
+): { readonly waitMs: number; readonly nextDelayMs: number } {
+  if (streamDurationMs >= STABLE_STREAM_DURATION_MS) {
+    return { waitMs: INITIAL_RECONNECT_DELAY_MS, nextDelayMs: INITIAL_RECONNECT_DELAY_MS };
+  }
+  return {
+    waitMs: currentDelayMs,
+    nextDelayMs: Math.min(currentDelayMs * 2, MAX_RECONNECT_DELAY_MS),
+  };
+}
+
 /** Parse the event framing used by EventSource, including delimiters split across network chunks. */
 export async function* parseSseFrames(body: ReadableStream<Uint8Array>): AsyncGenerator<SseFrame> {
   const reader = body.getReader();

@@ -9,10 +9,13 @@ type Subscriber = {
   events: SessionEvent[];
   waiters: Array<() => void>;
   closed: boolean;
+  resolveClosed: () => void;
 };
 
 export interface SessionEventSubscription {
   readonly initial: readonly SessionEvent[];
+  readonly closed: boolean;
+  readonly closedSignal: Promise<void>;
   next(): Promise<SessionEvent | undefined>;
   close(): void;
 }
@@ -26,7 +29,9 @@ export class SessionEventHub {
   #latest: SessionSnapshot | undefined;
   #revision = 0;
   #readyPromise: Promise<void> | undefined;
+  #unsubscribeSession: (() => void) | undefined;
   #dirtyDuringInitialization = false;
+  #closed = false;
 
   constructor(session: CatalogSession, epoch = randomUUID()) {
     this.#session = session;
@@ -35,12 +40,19 @@ export class SessionEventHub {
 
   async subscribe(lastEventId?: string): Promise<SessionEventSubscription> {
     await this.#ensureReady();
+    if (this.#closed) throw new Error('Session event hub is closed.');
     const initial = this.#eventsAfter(lastEventId);
-    const subscriber: Subscriber = { events: [], waiters: [], closed: false };
+    let resolveClosed!: () => void;
+    const closed = new Promise<void>((resolve) => (resolveClosed = resolve));
+    const subscriber: Subscriber = { events: [], waiters: [], closed: false, resolveClosed };
     this.#subscribers.add(subscriber);
 
     return {
       initial,
+      get closed() {
+        return subscriber.closed;
+      },
+      closedSignal: closed,
       next: async () => {
         if (subscriber.events.length > 0) return subscriber.events.shift();
         if (subscriber.closed) return undefined;
@@ -48,20 +60,24 @@ export class SessionEventHub {
         if (subscriber.events.length > 0) return subscriber.events.shift();
         return undefined;
       },
-      close: () => {
-        if (subscriber.closed) return;
-        subscriber.closed = true;
-        this.#subscribers.delete(subscriber);
-        for (const wake of subscriber.waiters.splice(0)) wake();
-      },
+      close: () => this.#closeSubscriber(subscriber),
     };
   }
 
+  close(): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    this.#unsubscribeSession?.();
+    this.#unsubscribeSession = undefined;
+    for (const subscriber of [...this.#subscribers]) this.#closeSubscriber(subscriber);
+  }
+
   async #ensureReady(): Promise<void> {
+    if (this.#closed) throw new Error('Session event hub is closed.');
     if (this.#readyPromise !== undefined) return this.#readyPromise;
 
     this.#readyPromise = (async () => {
-      this.#session.observe((snapshot) => {
+      this.#unsubscribeSession = this.#session.observe((snapshot) => {
         if (this.#latest === undefined) {
           this.#dirtyDuringInitialization = true;
           return;
@@ -70,6 +86,7 @@ export class SessionEventHub {
       });
 
       this.#latest = await this.#session.getSnapshot();
+      if (this.#closed) return;
       this.#publish('snapshot', this.#latest);
 
       if (this.#dirtyDuringInitialization) {
@@ -78,6 +95,14 @@ export class SessionEventHub {
       }
     })();
     return this.#readyPromise;
+  }
+
+  #closeSubscriber(subscriber: Subscriber): void {
+    if (subscriber.closed) return;
+    subscriber.closed = true;
+    this.#subscribers.delete(subscriber);
+    subscriber.resolveClosed();
+    for (const wake of subscriber.waiters.splice(0)) wake();
   }
 
   #acceptSnapshot(snapshot: SessionSnapshot): void {
@@ -142,13 +167,22 @@ export class SessionEventHub {
 export class SessionEventHubs {
   readonly #hubs = new Map<SessionId, SessionEventHub>();
   readonly #epoch = randomUUID();
+  #closed = false;
 
   forSession(session: CatalogSession): SessionEventHub {
+    if (this.#closed) throw new Error('Session event hubs are closed.');
     let hub = this.#hubs.get(session.id);
     if (hub === undefined) {
       hub = new SessionEventHub(session, this.#epoch);
       this.#hubs.set(session.id, hub);
     }
     return hub;
+  }
+
+  close(): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    for (const hub of this.#hubs.values()) hub.close();
+    this.#hubs.clear();
   }
 }

@@ -4,10 +4,25 @@ import {
   applySessionEvent,
   parseSessionEvent,
   parseSseFrames,
+  reconnectSchedule,
+  resolveApiBase,
   type SseFrame,
 } from '../src/lib/inspector.js';
 
 describe('inspector SSE client', () => {
+  it('allows plain HTTP only for loopback API URLs', () => {
+    expect(resolveApiBase('http://127.0.0.1:3000/')).toBe('http://127.0.0.1:3000');
+    expect(resolveApiBase('http://localhost:3000')).toBe('http://localhost:3000');
+    expect(resolveApiBase('https://factory.example')).toBe('https://factory.example');
+    expect(() => resolveApiBase('http://192.168.1.20:3000')).toThrow('HTTPS');
+  });
+
+  it('backs off short stream failures and resets after a stable connection', () => {
+    expect(reconnectSchedule(500, 1_000)).toEqual({ waitMs: 500, nextDelayMs: 1_000 });
+    expect(reconnectSchedule(1_000, 1_000)).toEqual({ waitMs: 1_000, nextDelayMs: 2_000 });
+    expect(reconnectSchedule(5_000, 30_000)).toEqual({ waitMs: 500, nextDelayMs: 500 });
+  });
+
   it('parses event frames when line endings and JSON data cross stream chunks', async () => {
     const wireEvent = event('snapshot', snapshot('session-a' as SessionId, 0));
     const data = JSON.stringify({ ...wireEvent, id: 'epoch/session/1' }, null, 1)

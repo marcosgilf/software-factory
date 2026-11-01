@@ -22,12 +22,13 @@ export interface AppOptions {
   readonly catalog?: SessionCatalog;
   readonly apiToken?: string;
   readonly allowedOrigins?: readonly string[];
+  readonly sessionEventHubs?: SessionEventHubs;
 }
 
 export function createApp(options: AppOptions = {}): Hono {
   const apiToken = options.apiToken ?? process.env.FACTORY_API_TOKEN;
   const allowedOrigins = options.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS;
-  const events = new SessionEventHubs();
+  const events = options.sessionEventHubs ?? new SessionEventHubs();
   const app = new Hono();
 
   app.use('*', async (context, next) => {
@@ -122,14 +123,26 @@ export function createApp(options: AppOptions = {}): Hono {
     const encoder = new TextEncoder();
     const requestSignal = context.req.raw.signal;
     let closed = false;
+    let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
 
-    const close = () => {
+    const stop = () => {
       if (closed) return;
       closed = true;
       subscription.close();
     };
+    const close = () => {
+      if (closed) return;
+      stop();
+      if (streamController !== undefined && streamController.desiredSize !== null) {
+        streamController.close();
+      }
+    };
 
     const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+        void subscription.closedSignal.then(close);
+      },
       async pull(controller) {
         if (closed) return;
         if (initial.length > 0) {
@@ -139,11 +152,15 @@ export function createApp(options: AppOptions = {}): Hono {
 
         const event = await nextOrHeartbeat(subscription);
         if (closed) return;
+        if (subscription.closed) {
+          close();
+          return;
+        }
         controller.enqueue(
           encoder.encode(event === undefined ? ': keep-alive\n\n' : formatSse(event)),
         );
       },
-      cancel: close,
+      cancel: stop,
     });
     requestSignal.addEventListener('abort', close, { once: true });
 

@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SqliteSessionCatalog } from '@factory/agent-runtime';
 import type { SessionId } from '@factory/contracts';
 import { createApp } from '../src/app.js';
+import { SessionEventHubs } from '../src/session-events.js';
 
 const DEVICE_TOKEN = 'test-device-token';
 
@@ -209,6 +210,35 @@ describe('device API', () => {
       await rm(directory, { recursive: true, force: true });
     }
   }, 30_000);
+
+  it('closes active event streams when event hubs shut down', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'factory-api-shutdown-'));
+    const catalog = new SqliteSessionCatalog({ directory });
+    const sessionEventHubs = new SessionEventHubs();
+
+    try {
+      await catalog.start();
+      const session = await catalog.createSession();
+      const response = await createApp({
+        catalog,
+        apiToken: DEVICE_TOKEN,
+        sessionEventHubs,
+      }).request(`/api/sessions/${session.id}/events`, {
+        headers: { Authorization: `Bearer ${DEVICE_TOKEN}` },
+      });
+      const reader = response.body!.getReader();
+      await readSseEvent(reader);
+
+      const pendingRead = reader.read();
+      sessionEventHubs.close();
+      await expect(pendingRead).resolves.toMatchObject({ done: true });
+      reader.releaseLock();
+    } finally {
+      sessionEventHubs.close();
+      await catalog.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 function promiseSignal() {

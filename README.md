@@ -12,7 +12,7 @@ pnpm install
 pnpm dev
 ```
 
-The web app runs on Astro's local development server and the API listens on port 3000 by default.
+The web app runs on Astro's local development server and the API listens on `127.0.0.1:3000` by default.
 Use `pnpm dev:web` or `pnpm dev:api` to start either app separately; set `PORT` to change the API
 port.
 
