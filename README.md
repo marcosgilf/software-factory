@@ -39,8 +39,8 @@ messages as well.
 - `apps/api` — Hono API and server entry point
 - `packages/contracts` — shared API types
 - `packages/agent-runtime` — Pi Durable SQLite harness, recovery and conversation workspaces
-- `packages/integrations` — integration type boundary
-- `packages/workflows` — workflow type boundary
+- `packages/integrations` — typed GitHub adapter
+- `packages/workflows` — durable issue-to-PR workflow and approval
 
 The four library packages and Hono API use TypeScript project references. Astro is checked and built
 separately. Local package dependencies use `workspace:*`; package exports define each library's

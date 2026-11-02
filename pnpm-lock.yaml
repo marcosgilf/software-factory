@@ -199,19 +199,6 @@ importers:
 
   apps/api:
     dependencies:
-      '@factory/agent-runtime':
-        specifier: workspace:*
-        version: link:../../packages/agent-runtime
-      '@factory/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@hono/node-server':
-        specifier: ^1.19.17
-        version: 1.19.17(hono@4.13.16)
-      hono:
-        specifier: ^4.13.16
-        version: 4.13.16
-    devDependencies:
       '@earendil-works/chord':
         specifier: 1.4.0
         version: 1.4.0
@@ -221,6 +208,24 @@ importers:
       '@earendil-works/pi-durable':
         specifier: 1.4.0
         version: 1.4.0(@aws-sdk/credential-provider-node@3.972.90)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@3.25.76)
+      '@factory/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
+      '@factory/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@factory/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
+      '@factory/workflows':
+        specifier: workspace:*
+        version: link:../../packages/workflows
+      '@hono/node-server':
+        specifier: ^1.19.17
+        version: 1.19.17(hono@4.13.16)
+      hono:
+        specifier: ^4.13.16
+        version: 4.13.16
 
   apps/web:
     dependencies:
@@ -259,12 +264,22 @@ importers:
 
   packages/workflows:
     dependencies:
+      '@earendil-works/chord':
+        specifier: 1.4.0
+        version: 1.4.0
+      '@earendil-works/pi-durable':
+        specifier: 1.4.0
+        version: 1.4.0(@aws-sdk/credential-provider-node@3.972.90)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@3.25.76)
       '@factory/agent-runtime':
         specifier: workspace:*
         version: link:../agent-runtime
       '@factory/integrations':
         specifier: workspace:*
         version: link:../integrations
+    devDependencies:
+      '@earendil-works/pi-ai':
+        specifier: 1.4.0
+        version: 1.4.0(@aws-sdk/credential-provider-node@3.972.90)(@smithy/signature-v4@5.7.4)(undici@8.12.3)(ws@8.22.0)(zod@3.25.76)
 
 packages:
 

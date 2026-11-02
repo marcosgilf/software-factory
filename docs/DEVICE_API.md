@@ -17,14 +17,17 @@ log query strings, headers, request bodies, task payloads or streamed data.
 
 ## Endpoints
 
-| Method | Path                                     | Response                                          |
-| ------ | ---------------------------------------- | ------------------------------------------------- |
-| `GET`  | `/api/sessions`                          | Typed list of session summaries                   |
-| `POST` | `/api/sessions`                          | Create a durable session and return its summary   |
-| `GET`  | `/api/sessions/:sessionId`               | Session summary                                   |
-| `GET`  | `/api/sessions/:sessionId/tasks`         | Safe summaries for tasks in the session           |
-| `GET`  | `/api/sessions/:sessionId/tasks/:taskId` | Safe summary for one task                         |
-| `GET`  | `/api/sessions/:sessionId/events`        | Snapshot and incremental full-snapshot SSE events |
+| Method | Path                                              | Response                                          |
+| ------ | ------------------------------------------------- | ------------------------------------------------- |
+| `GET`  | `/api/sessions`                                   | Typed list of session summaries                   |
+| `POST` | `/api/sessions`                                   | Create a durable session and return its summary   |
+| `GET`  | `/api/sessions/:sessionId`                        | Session summary                                   |
+| `GET`  | `/api/sessions/:sessionId/tasks`                  | Safe summaries for tasks in the session           |
+| `GET`  | `/api/sessions/:sessionId/tasks/:taskId`          | Safe summary for one task                         |
+| `POST` | `/api/sessions/:sessionId/workflows/issue-to-pr`  | Start issue-to-PR task                            |
+| `GET`  | `/api/sessions/:sessionId/tasks/:taskId/approval` | Approval progress and mock PR URL                 |
+| `POST` | `/api/sessions/:sessionId/tasks/:taskId/approval` | Approve or reject an issue-to-PR task             |
+| `GET`  | `/api/sessions/:sessionId/events`                 | Snapshot and incremental full-snapshot SSE events |
 
 Summaries include IDs, task kind, lifecycle status and timestamps. Inputs, checkpoints, outcomes,
 transcripts, provider credentials and task error details stay in the backend.
@@ -41,6 +44,13 @@ retained history replays newer events. A malformed, expired, future or previous-
 produces a `resync` event with the current full snapshot. Every event carries a full snapshot, so the
 client reducer can ignore stale revisions and recover directly from a resync.
 
+The issue-to-PR routes are available when the API starts with `FACTORY_ISSUE_TO_PR_MODE=mock`. This
+mode accepts issue `42` as eligible, issue `43` without the required label, and closed issue `44`.
+The executor uses a pinned Node image in Docker with no network, a non-root UID, the default seccomp
+profile, a read-only root filesystem, and one temporary workspace mount. It runs one deterministic test, then deletes that
+workspace. It receives no GitHub credential or Docker socket. The mock GitHub adapter makes no
+network calls and does not create a real PR. Do not use this mode as a production integration.
+
 The Astro client uses `fetch` instead of native `EventSource` because it must send the device bearer
 token and `Last-Event-ID` headers. The token is held only in tab memory and is never stored in
 browser storage or placed in a URL. The client allows plain HTTP only for loopback API URLs. For
@@ -48,3 +58,37 @@ remote access, use an HTTPS reverse proxy or an encrypted tunnel that forwards t
 send the bearer token over non-loopback HTTP. The API allows browser origins `http://localhost:4321`
 and `http://127.0.0.1:4321` by default; set `FACTORY_ALLOWED_ORIGINS` to a comma-separated list
 when serving the inspector from a different trusted origin.
+
+## Local mock issue-to-PR test
+
+Start Docker and load the pinned image once, then start the API with a local-only token and mock
+workflow mode:
+
+```sh
+docker pull node@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d
+FACTORY_API_TOKEN=local-test-token FACTORY_ISSUE_TO_PR_MODE=mock pnpm dev:api
+```
+
+Create a session, start issue `42`, then poll its approval status until it is `pending`:
+
+```sh
+API=http://127.0.0.1:3000
+TOKEN=local-test-token
+SESSION=$(curl -fsS -X POST "$API/api/sessions" -H "Authorization: Bearer $TOKEN" | jq -r '.session.id')
+TASK=$(curl -fsS -X POST "$API/api/sessions/$SESSION/workflows/issue-to-pr" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"issueNumber":42}' | jq -r '.task.id')
+curl -fsS "$API/api/sessions/$SESSION/tasks/$TASK/approval" -H "Authorization: Bearer $TOKEN"
+```
+
+Approve task and poll until response shows `completed` and a mock `pullRequestUrl`:
+
+```sh
+curl -fsS -X POST "$API/api/sessions/$SESSION/tasks/$TASK/approval" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"decision":"approved"}'
+curl -fsS "$API/api/sessions/$SESSION/tasks/$TASK/approval" -H "Authorization: Bearer $TOKEN"
+```
+
+Use issue `43` to verify the required `factory/approved` label gate. This mock is in memory; use
+workflow crash-recovery tests to verify replay across a process restart.

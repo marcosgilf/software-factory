@@ -5,6 +5,9 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import {
   healthResponse,
   type ApiErrorResponse,
+  type IssueToPrApprovalRequest,
+  type IssueToPrProgressResponse,
+  type IssueToPrStartRequest,
   type SessionId,
   type SessionListResponse,
   type SessionResponse,
@@ -12,6 +15,12 @@ import {
   type TaskResponse,
 } from '@factory/contracts';
 import type { SessionCatalog } from '@factory/agent-runtime';
+import { ISSUE_TO_PR_TASK_NAME } from '@factory/workflows';
+import {
+  IssueToPrApprovalConflictError,
+  IssueToPrTaskNotFoundError,
+  type IssueToPrService,
+} from './issue-to-pr-service.js';
 import { SessionEventHubs, type SessionEventSubscription } from './session-events.js';
 
 const SESSION_ID_PATTERN =
@@ -23,6 +32,7 @@ export interface AppOptions {
   readonly apiToken?: string;
   readonly allowedOrigins?: readonly string[];
   readonly sessionEventHubs?: SessionEventHubs;
+  readonly issueToPrService?: IssueToPrService;
 }
 
 export function createApp(options: AppOptions = {}): Hono {
@@ -113,6 +123,103 @@ export function createApp(options: AppOptions = {}): Hono {
     return context.json(response);
   });
 
+  app.post('/api/sessions/:sessionId/workflows/issue-to-pr', async (context) => {
+    const session = findSession(context, options.catalog);
+    if (session instanceof Response) return session;
+    if (options.issueToPrService === undefined) {
+      return jsonError(
+        context,
+        503,
+        'workflow_not_configured',
+        'The issue workflow is not configured.',
+      );
+    }
+
+    const body = await readJsonBody(context);
+    if (!isIssueToPrStartRequest(body)) {
+      return jsonError(context, 400, 'invalid_request', 'A positive issue number is required.');
+    }
+
+    const task = await options.issueToPrService.start(session, body.issueNumber);
+    const response: TaskResponse = { task };
+    return context.json(response, 202);
+  });
+
+  app.get('/api/sessions/:sessionId/tasks/:taskId/approval', async (context) => {
+    const session = findSession(context, options.catalog);
+    if (session instanceof Response) return session;
+    if (options.issueToPrService === undefined) {
+      return jsonError(
+        context,
+        503,
+        'workflow_not_configured',
+        'The issue workflow is not configured.',
+      );
+    }
+    const task = await session.getTask(context.req.param('taskId'));
+    if (task === undefined || task.kind !== ISSUE_TO_PR_TASK_NAME) {
+      return jsonError(context, 404, 'task_not_found', 'The issue workflow task does not exist.');
+    }
+
+    try {
+      const response: IssueToPrProgressResponse = await options.issueToPrService.progress(
+        session,
+        String(task.id),
+      );
+      return context.json(response);
+    } catch (error) {
+      if (error instanceof IssueToPrTaskNotFoundError) {
+        return jsonError(context, 404, 'task_not_found', 'The issue workflow task does not exist.');
+      }
+      throw error;
+    }
+  });
+
+  app.post('/api/sessions/:sessionId/tasks/:taskId/approval', async (context) => {
+    const session = findSession(context, options.catalog);
+    if (session instanceof Response) return session;
+    if (options.issueToPrService === undefined) {
+      return jsonError(
+        context,
+        503,
+        'workflow_not_configured',
+        'The issue workflow is not configured.',
+      );
+    }
+    const task = await session.getTask(context.req.param('taskId'));
+    if (task === undefined || task.kind !== ISSUE_TO_PR_TASK_NAME) {
+      return jsonError(context, 404, 'task_not_found', 'The issue workflow task does not exist.');
+    }
+
+    const body = await readJsonBody(context);
+    if (!isIssueToPrApprovalRequest(body)) {
+      return jsonError(context, 400, 'invalid_request', 'Decision must be approved or rejected.');
+    }
+
+    try {
+      const updated = await options.issueToPrService.decide(
+        session,
+        String(task.id),
+        body.decision,
+      );
+      const response: TaskResponse = { task: updated };
+      return context.json(response, 202);
+    } catch (error) {
+      if (error instanceof IssueToPrTaskNotFoundError) {
+        return jsonError(context, 404, 'task_not_found', 'The issue workflow task does not exist.');
+      }
+      if (error instanceof IssueToPrApprovalConflictError) {
+        return jsonError(
+          context,
+          409,
+          'approval_conflict',
+          'The task is not waiting for approval.',
+        );
+      }
+      throw error;
+    }
+  });
+
   app.get('/api/sessions/:sessionId/events', async (context) => {
     const session = findSession(context, options.catalog);
     if (session instanceof Response) return session;
@@ -175,6 +282,28 @@ export function createApp(options: AppOptions = {}): Hono {
   });
 
   return app;
+}
+
+async function readJsonBody(context: Context): Promise<unknown> {
+  try {
+    return await context.req.json();
+  } catch {
+    return undefined;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isIssueToPrStartRequest(value: unknown): value is IssueToPrStartRequest {
+  if (!isRecord(value)) return false;
+  const issueNumber = value.issueNumber;
+  return typeof issueNumber === 'number' && Number.isSafeInteger(issueNumber) && issueNumber > 0;
+}
+
+function isIssueToPrApprovalRequest(value: unknown): value is IssueToPrApprovalRequest {
+  return isRecord(value) && (value.decision === 'approved' || value.decision === 'rejected');
 }
 
 function requireCatalog(context: Context, catalog?: SessionCatalog) {

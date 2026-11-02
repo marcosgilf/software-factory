@@ -59,6 +59,30 @@ export interface TaskResponse {
   readonly task: TaskSummary;
 }
 
+export interface IssueToPrStartRequest {
+  readonly issueNumber: number;
+}
+
+export type IssueToPrApprovalDecision = 'approved' | 'rejected';
+
+export interface IssueToPrApprovalRequest {
+  readonly decision: IssueToPrApprovalDecision;
+}
+
+export type IssueToPrProgressStatus =
+  | 'preparing'
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'completed'
+  | 'failed'
+  | 'aborted';
+
+export interface IssueToPrProgressResponse {
+  readonly status: IssueToPrProgressStatus;
+  readonly pullRequestUrl?: string;
+}
+
 export type SessionEventType = 'snapshot' | 'update' | 'resync';
 
 export interface SessionEvent {
