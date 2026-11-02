@@ -1,12 +1,21 @@
 import { serve } from '@hono/node-server';
 import { SqliteSessionCatalog } from '@factory/agent-runtime';
 import { createApp } from './app.js';
+import { DockerMockIssueWorkspaceExecutor } from './docker-mock-issue-workspace-executor.js';
+import { createMockIssueToPrRuntime } from './mock-issue-to-pr.js';
 import { SessionEventHubs } from './session-events.js';
 
 const port = Number(process.env.PORT ?? 3000);
-const catalog = new SqliteSessionCatalog(
-  process.env.FACTORY_DATA_DIR === undefined ? {} : { directory: process.env.FACTORY_DATA_DIR },
-);
+const mockWorkflow =
+  process.env.FACTORY_ISSUE_TO_PR_MODE === 'mock'
+    ? createMockIssueToPrRuntime(new DockerMockIssueWorkspaceExecutor())
+    : undefined;
+const catalog = new SqliteSessionCatalog({
+  ...(process.env.FACTORY_DATA_DIR === undefined
+    ? {}
+    : { directory: process.env.FACTORY_DATA_DIR }),
+  ...(mockWorkflow === undefined ? {} : { harnessOptions: mockWorkflow.harnessOptions }),
+});
 const sessionEventHubs = new SessionEventHubs();
 const allowedOrigins = process.env.FACTORY_ALLOWED_ORIGINS?.split(',')
   .map((origin) => origin.trim())
@@ -21,6 +30,7 @@ const server = serve({
       ? {}
       : { apiToken: process.env.FACTORY_API_TOKEN }),
     ...(allowedOrigins === undefined ? {} : { allowedOrigins }),
+    ...(mockWorkflow === undefined ? {} : { issueToPrService: mockWorkflow.issueToPrService }),
     sessionEventHubs,
   }).fetch,
   port,

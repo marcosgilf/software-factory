@@ -16,7 +16,12 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@earendil-works/chord": "1.4.0",
+    "@earendil-works/pi-durable": "1.4.0",
     "@factory/agent-runtime": "workspace:*",
     "@factory/integrations": "workspace:*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "1.4.0"
   }
 }

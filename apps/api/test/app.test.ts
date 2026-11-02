@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SqliteSessionCatalog } from '@factory/agent-runtime';
 import type { SessionId } from '@factory/contracts';
 import { createApp } from '../src/app.js';
+import { createMockIssueToPrRuntime } from '../src/mock-issue-to-pr.js';
 import { SessionEventHubs } from '../src/session-events.js';
 
 const DEVICE_TOKEN = 'test-device-token';
@@ -211,6 +212,99 @@ describe('device API', () => {
     }
   }, 30_000);
 
+  it('starts, approves, and inspects a mock issue-to-PR workflow over HTTP', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'factory-api-workflow-'));
+    const mockWorkflow = createMockIssueToPrRuntime();
+    const catalog = new SqliteSessionCatalog({
+      directory,
+      harnessOptions: mockWorkflow.harnessOptions,
+    });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    try {
+      await catalog.start();
+      const app = createApp({
+        catalog,
+        apiToken: DEVICE_TOKEN,
+        issueToPrService: mockWorkflow.issueToPrService,
+      });
+      const created = await app.request('/api/sessions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${DEVICE_TOKEN}` },
+      });
+      const { session } = (await created.json()) as { session: { id: string } };
+      const sessionPath = `/api/sessions/${session.id}`;
+      const start = await app.request(`${sessionPath}/workflows/issue-to-pr`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${DEVICE_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ issueNumber: 42 }),
+      });
+      expect(start.status).toBe(202);
+      const started = (await start.json()) as { task: { id: number; kind: string } };
+      expect(started.task.kind).toBe('factory.workflow.issue-to-pr');
+      const approvalPath = `${sessionPath}/tasks/${started.task.id}/approval`;
+
+      const pending = await waitForJson<{ status: string }>(async () => {
+        const response = await app.request(approvalPath, {
+          headers: { Authorization: `Bearer ${DEVICE_TOKEN}` },
+        });
+        if (response.status !== 200) return undefined;
+        const progress = (await response.json()) as { status: string };
+        return progress.status === 'pending' ? progress : undefined;
+      });
+      expect(pending.status).toBe('pending');
+
+      const approved = await app.request(approvalPath, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${DEVICE_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ decision: 'approved' }),
+      });
+      expect(approved.status).toBe(202);
+
+      const completed = await waitForJson<{ status: string; pullRequestUrl?: string }>(async () => {
+        const response = await app.request(approvalPath, {
+          headers: { Authorization: `Bearer ${DEVICE_TOKEN}` },
+        });
+        const progress = (await response.json()) as { status: string; pullRequestUrl?: string };
+        return progress.status === 'completed' ? progress : undefined;
+      });
+      expect(completed.pullRequestUrl).toMatch(
+        /^https:\/\/github\.com\/factory-mock\/demo\/pull\//,
+      );
+
+      const rejected = await app.request(`${sessionPath}/workflows/issue-to-pr`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${DEVICE_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ issueNumber: 43 }),
+      });
+      expect(rejected.status).toBe(202);
+      const rejectedTask = (await rejected.json()) as { task: { id: number } };
+      const rejectedProgress = await waitForJson<{ status: string }>(async () => {
+        const response = await app.request(
+          `${sessionPath}/tasks/${rejectedTask.task.id}/approval`,
+          { headers: { Authorization: `Bearer ${DEVICE_TOKEN}` } },
+        );
+        const progress = (await response.json()) as { status: string };
+        return progress.status === 'rejected' ? progress : undefined;
+      });
+      expect(rejectedProgress.status).toBe('rejected');
+      expect(log.mock.calls.map(([line]) => String(line)).join('\n')).not.toContain(DEVICE_TOKEN);
+    } finally {
+      log.mockRestore();
+      await catalog.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   it('closes active event streams when event hubs shut down', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'factory-api-shutdown-'));
     const catalog = new SqliteSessionCatalog({ directory });
@@ -240,6 +334,15 @@ describe('device API', () => {
     }
   });
 });
+
+async function waitForJson<T>(read: () => Promise<T | undefined>): Promise<T> {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const value = await read();
+    if (value !== undefined) return value;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('Timed out waiting for an API workflow state.');
+}
 
 function promiseSignal() {
   let resolve!: () => void;
