@@ -25,7 +25,7 @@ log query strings, headers, request bodies, task payloads or streamed data.
 | `GET`  | `/api/sessions/:sessionId/tasks`                  | Safe summaries for tasks in the session           |
 | `GET`  | `/api/sessions/:sessionId/tasks/:taskId`          | Safe summary for one task                         |
 | `POST` | `/api/sessions/:sessionId/workflows/issue-to-pr`  | Start issue-to-PR task                            |
-| `GET`  | `/api/sessions/:sessionId/tasks/:taskId/approval` | Approval progress and mock PR URL                 |
+| `GET`  | `/api/sessions/:sessionId/tasks/:taskId/approval` | Approval progress and completed PR URL            |
 | `POST` | `/api/sessions/:sessionId/tasks/:taskId/approval` | Approve or reject an issue-to-PR task             |
 | `GET`  | `/api/sessions/:sessionId/events`                 | Snapshot and incremental full-snapshot SSE events |
 
@@ -44,12 +44,64 @@ retained history replays newer events. A malformed, expired, future or previous-
 produces a `resync` event with the current full snapshot. Every event carries a full snapshot, so the
 client reducer can ignore stale revisions and recover directly from a resync.
 
-The issue-to-PR routes are available when the API starts with `FACTORY_ISSUE_TO_PR_MODE=mock`. This
-mode accepts issue `42` as eligible, issue `43` without the required label, and closed issue `44`.
-The executor uses a pinned Node image in Docker with no network, a non-root UID, the default seccomp
-profile, a read-only root filesystem, and one temporary workspace mount. It runs one deterministic test, then deletes that
-workspace. It receives no GitHub credential or Docker socket. The mock GitHub adapter makes no
-network calls and does not create a real PR. Do not use this mode as a production integration.
+The issue-to-PR routes are configured with `FACTORY_ISSUE_TO_PR_MODE=mock` or `github`. Mock mode
+accepts issue `42` as eligible, issue `43` without the required label, and closed issue `44`. Its
+executor uses a pinned Node image in Docker with no network, a non-root UID, the default seccomp
+profile, a read-only root filesystem, and one temporary workspace mount. It runs one deterministic
+test, then deletes that workspace. It receives no GitHub credential or Docker socket. The mock
+GitHub adapter makes no network calls and does not create a real PR.
+
+## Real GitHub adapter (PR A)
+
+Inject these variables into the API process. Store `FACTORY_GITHUB_TOKEN` in a secret manager; do not
+put it in a committed file, browser, Docker container, agent environment or command transcript.
+
+| Variable                              | Required value                                            |
+| ------------------------------------- | --------------------------------------------------------- |
+| `FACTORY_ISSUE_TO_PR_MODE`            | `github`                                                  |
+| `FACTORY_GITHUB_TOKEN`                | Fine-grained PAT, backend only                            |
+| `FACTORY_GITHUB_REPOSITORY`           | One target such as `owner/repo`                           |
+| `FACTORY_GITHUB_DEFAULT_BRANCH`       | Exact base branch, such as `main`                         |
+| `FACTORY_GITHUB_ALLOWED_REPOSITORIES` | Comma-separated repository allowlist; must include target |
+
+Scope the PAT to the target repository. Give it metadata read, issues read, contents write and pull
+requests write permissions only. Keep API bound to loopback. `FACTORY_API_TOKEN` remains separate.
+The API does not accept a repository or base-branch override from a request.
+
+The publisher creates only a deterministic `factory/issue-<operation-hash>` branch. It allows up to
+100 UTF-8 add/modify files and 1 MB total, with regular-file mode only; it cannot delete files or
+create executable, symlink or submodule entries. It rejects path traversal, `.git`, `.github`,
+environment files and common credential-file suffixes. It requires the configured base
+SHA to remain current immediately before creating the ref. A retry accepts an existing branch only
+when commit parent, tree, change digest and operation marker match. A failure before ref creation can
+leave unreachable Git objects, but it does not create a visible branch. Pull requests must use the
+generated branch and configured base.
+
+PR A configures the real adapter and publisher, but does not include a coding executor. In `github`
+mode, the API can read an issue and apply the label gate; an eligible task then fails closed before
+workspace execution. It does not publish a branch or create a PR. PR B will add isolated code changes
+and approval bound to the resulting commit.
+
+### Adapter-only operator runbook
+
+1. Create a fine-grained PAT for the configured repository with the permissions above.
+2. Store the PAT and `FACTORY_API_TOKEN` in a secret manager. Inject them into the API process; do not
+   put either value in a command, `.env` file, browser or log.
+3. Set target and allowlist, then start the API:
+
+   ```sh
+   FACTORY_ISSUE_TO_PR_MODE=github \
+   FACTORY_GITHUB_REPOSITORY=owner/repo \
+   FACTORY_GITHUB_DEFAULT_BRANCH=main \
+   FACTORY_GITHUB_ALLOWED_REPOSITORIES=owner/repo \
+   pnpm dev:api
+   ```
+
+4. Use the authenticated issue-to-PR start route to verify issue lookup and the required-label gate.
+   An eligible task must end as `failed` in this PR because no coding executor is configured. No
+   branch or PR is created.
+5. Stop the API with `SIGINT` or `SIGTERM`. Revoke the PAT in GitHub and remove it from the secret
+   manager when integration access is no longer needed.
 
 The Astro client uses `fetch` instead of native `EventSource` because it must send the device bearer
 token and `Last-Event-ID` headers. The token is held only in tab memory and is never stored in

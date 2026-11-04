@@ -38,8 +38,9 @@
 ## Milestone 3 — Safe integration and ticket-to-PR
 
 - [x] Local mock HTTP slice with Docker-isolated deterministic work, approval, and recovery tests.
-- [ ] Scoped PAT-backed adapter with minimal env and redacted telemetry.
-- [ ] Approval state machine and remote write reconciliation.
+- [x] Scoped backend-only GitHub adapter with validated environment and repository allowlist.
+- [x] Restricted branch publisher with replay reconciliation tests.
+- [ ] Approval bound to actual changes and remote write reconciliation.
 - [ ] GitHub issue -> isolated workspace -> tests -> PR workflow.
 
 **Exit:** human-approved PR created once despite simulated restart at critical points.
