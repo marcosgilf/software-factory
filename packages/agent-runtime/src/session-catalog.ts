@@ -151,10 +151,14 @@ class ManagedCatalogSession implements CatalogSession {
   constructor(id: SessionId, harness: AgentHarness) {
     this.id = id;
     this.harness = harness;
-    this.#unsubscribeCommits = harness.subscribeCommits(() => {
-      // Pi Durable listeners are synchronous and must not call back into the Session.
-      void this.#enqueue(() => this.#refresh()).catch(() => undefined);
+    const observation = harness.observeCommits({
+      advance: () => {
+        // Pi Durable listeners are synchronous and must not call back into the Session.
+        void this.#enqueue(() => this.#refresh()).catch(() => undefined);
+      },
+      end: () => undefined,
     });
+    this.#unsubscribeCommits = () => observation.detach();
   }
 
   getSnapshot(): Promise<SessionSnapshot> {

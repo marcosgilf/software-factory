@@ -1,6 +1,8 @@
 packages:
   - apps/*
   - packages/*
+overrides:
+  '@smithy/core': 3.39.0
 allowBuilds:
   '@google/genai': false
   esbuild: true
@@ -9,3 +11,6 @@ allowBuilds:
   sharp: true
 minimumReleaseAgeExclude:
   - hono@4.13.16
+  # Fix upstream custom-logger redaction bug in @smithy/core@3.37.0.
+  - '@smithy/core@3.39.0'
+  - '@smithy/types@4.20.0'
