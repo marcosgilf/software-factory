@@ -1,8 +1,11 @@
 import type {
+  IssueToPrApprovalDecision,
+  IssueToPrProgressResponse,
   SessionId,
   SessionListResponse,
   SessionResponse,
   SessionSnapshot,
+  TaskResponse,
   TaskSummary,
 } from '@factory/contracts';
 import {
@@ -17,6 +20,8 @@ interface ApiErrorBody {
   readonly error?: { readonly message?: string };
 }
 
+const ISSUE_TO_PR_TASK_KIND = 'factory.workflow.issue-to-pr';
+
 export function connectInspector(document: Document): void {
   const connectionForm = document.querySelector<HTMLFormElement>('#connection-form');
   const apiUrlInput = document.querySelector<HTMLInputElement>('#api-url');
@@ -28,6 +33,19 @@ export function connectInspector(document: Document): void {
   const sessionIdLabel = document.querySelector<HTMLElement>('#session-id');
   const sessionStatus = document.querySelector<HTMLElement>('#session-status');
   const taskList = document.querySelector<HTMLTableSectionElement>('#task-list');
+  const workflowForm = document.querySelector<HTMLFormElement>('#issue-to-pr-form');
+  const issueNumberInput = document.querySelector<HTMLInputElement>('#issue-number');
+  const startWorkflowButton = document.querySelector<HTMLButtonElement>('#start-issue-to-pr');
+  const workflowProgressLabel = document.querySelector<HTMLLabelElement>(
+    '#workflow-progress-label',
+  );
+  const workflowProgress = document.querySelector<HTMLProgressElement>('#workflow-progress');
+  const workflowStatus = document.querySelector<HTMLElement>('#workflow-status');
+  const workflowActions = document.querySelector<HTMLElement>('#workflow-actions');
+  const approveWorkflowButton = document.querySelector<HTMLButtonElement>('#approve-issue-to-pr');
+  const rejectWorkflowButton = document.querySelector<HTMLButtonElement>('#reject-issue-to-pr');
+  const workflowResult = document.querySelector<HTMLElement>('#workflow-result');
+  const workflowPullRequestUrl = document.querySelector<HTMLElement>('#workflow-pr-url');
 
   if (
     connectionForm === null ||
@@ -39,7 +57,18 @@ export function connectInspector(document: Document): void {
     message === null ||
     sessionIdLabel === null ||
     sessionStatus === null ||
-    taskList === null
+    taskList === null ||
+    workflowForm === null ||
+    issueNumberInput === null ||
+    startWorkflowButton === null ||
+    workflowProgressLabel === null ||
+    workflowProgress === null ||
+    workflowStatus === null ||
+    workflowActions === null ||
+    approveWorkflowButton === null ||
+    rejectWorkflowButton === null ||
+    workflowResult === null ||
+    workflowPullRequestUrl === null
   ) {
     return;
   }
@@ -54,15 +83,37 @@ export function connectInspector(document: Document): void {
   const sessionIdElement = sessionIdLabel as HTMLElement;
   const statusElement = sessionStatus as HTMLElement;
   const taskListElement = taskList as HTMLTableSectionElement;
+  const workflowFormElement = workflowForm as HTMLFormElement;
+  const issueNumberElement = issueNumberInput as HTMLInputElement;
+  const startWorkflowElement = startWorkflowButton as HTMLButtonElement;
+  const workflowProgressLabelElement = workflowProgressLabel as HTMLLabelElement;
+  const workflowProgressElement = workflowProgress as HTMLProgressElement;
+  const workflowStatusElement = workflowStatus as HTMLElement;
+  const workflowActionsElement = workflowActions as HTMLElement;
+  const approveWorkflowElement = approveWorkflowButton as HTMLButtonElement;
+  const rejectWorkflowElement = rejectWorkflowButton as HTMLButtonElement;
+  const workflowResultElement = workflowResult as HTMLElement;
+  const workflowPullRequestUrlElement = workflowPullRequestUrl as HTMLElement;
 
   let apiToken = '';
   let activeSessionId: SessionId | undefined;
   let activeStream: AbortController | undefined;
+  let workflowPoll: AbortController | undefined;
+  let activeWorkflowSessionId: SessionId | undefined;
+  let activeWorkflowTaskId: number | undefined;
+  let workflowIsTerminal = true;
+  let workflowDecisionInFlight = false;
   const lastEventIds = new Map<SessionId, string>();
 
   formElement.addEventListener('submit', async (event) => {
     event.preventDefault();
     activeStream?.abort();
+    workflowPoll?.abort();
+    activeSessionId = undefined;
+    resetWorkflow('Connecting…');
+    clearSnapshot();
+    selectorElement.disabled = true;
+    createElement.disabled = true;
     apiToken = secretElement.value;
     connectElement.disabled = true;
     setMessage('Connecting…');
@@ -79,12 +130,14 @@ export function connectInspector(document: Document): void {
         void connectSession(selected);
       } else {
         clearSnapshot();
+        resetWorkflow('Create or choose a session to start an issue workflow.');
       }
     } catch (error) {
       apiToken = '';
       secretElement.value = '';
       selectorElement.disabled = true;
       createElement.disabled = true;
+      resetWorkflow('Connect to the device API and choose a session to start.');
       setMessage(errorMessage(error));
     } finally {
       connectElement.disabled = false;
@@ -93,7 +146,14 @@ export function connectInspector(document: Document): void {
 
   selectorElement.addEventListener('change', () => {
     const selected = selectorElement.value as SessionId;
-    if (selected.length > 0) void connectSession(selected);
+    if (selected.length > 0) {
+      void connectSession(selected);
+    } else {
+      activeStream?.abort();
+      activeSessionId = undefined;
+      clearSnapshot();
+      resetWorkflow('Choose a session to start an issue workflow.');
+    }
   });
 
   createElement.addEventListener('click', async () => {
@@ -112,8 +172,183 @@ export function connectInspector(document: Document): void {
     }
   });
 
+  issueNumberElement.addEventListener('input', () => issueNumberElement.setCustomValidity(''));
+  workflowFormElement.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const sessionId = activeSessionId;
+    const issueNumber = Number(issueNumberElement.value);
+    if (sessionId === undefined) {
+      setWorkflowStatus('Choose a session before starting an issue workflow.');
+      return;
+    }
+    if (!Number.isSafeInteger(issueNumber) || issueNumber <= 0) {
+      issueNumberElement.setCustomValidity('Enter a positive whole GitHub issue number.');
+      issueNumberElement.reportValidity();
+      return;
+    }
+    if (!workflowIsTerminal) {
+      setWorkflowStatus('Wait for the current issue workflow to finish first.');
+      return;
+    }
+
+    issueNumberElement.setCustomValidity('');
+    startWorkflowElement.disabled = true;
+    setWorkflowStatus('Starting issue workflow…');
+    try {
+      const started = await request<TaskResponse>(
+        `/api/sessions/${encodeURIComponent(sessionId)}/workflows/issue-to-pr`,
+        { method: 'POST', body: JSON.stringify({ issueNumber }) },
+      );
+      trackWorkflowTask(
+        sessionId,
+        started.task.id,
+        'Workflow started. Checking issue eligibility…',
+      );
+    } catch (error) {
+      workflowIsTerminal = true;
+      startWorkflowElement.disabled = activeSessionId === undefined;
+      setWorkflowStatus(errorMessage(error));
+    }
+  });
+
+  approveWorkflowElement.addEventListener('click', () => {
+    void decideWorkflow('approved');
+  });
+  rejectWorkflowElement.addEventListener('click', () => {
+    void decideWorkflow('rejected');
+  });
+
   function setMessage(text: string): void {
     messageElement.textContent = text;
+  }
+
+  function setWorkflowStatus(text: string): void {
+    if (workflowStatusElement.textContent !== text) workflowStatusElement.textContent = text;
+  }
+
+  function resetWorkflow(status: string): void {
+    workflowPoll?.abort();
+    workflowPoll = undefined;
+    activeWorkflowSessionId = undefined;
+    activeWorkflowTaskId = undefined;
+    workflowIsTerminal = true;
+    workflowDecisionInFlight = false;
+    startWorkflowElement.disabled = activeSessionId === undefined;
+    workflowProgressLabelElement.hidden = true;
+    workflowProgressElement.hidden = true;
+    workflowActionsElement.hidden = true;
+    approveWorkflowElement.disabled = false;
+    rejectWorkflowElement.disabled = false;
+    workflowResultElement.hidden = true;
+    workflowPullRequestUrlElement.textContent = '';
+    setWorkflowStatus(status);
+  }
+
+  function trackWorkflowTask(sessionId: SessionId, taskId: number, status: string): void {
+    if (activeWorkflowSessionId === sessionId && activeWorkflowTaskId === taskId) return;
+    workflowPoll?.abort();
+    activeWorkflowSessionId = sessionId;
+    activeWorkflowTaskId = taskId;
+    workflowIsTerminal = false;
+    workflowDecisionInFlight = false;
+    startWorkflowElement.disabled = true;
+    workflowActionsElement.hidden = true;
+    workflowResultElement.hidden = true;
+    setWorkflowStatus(status);
+    startWorkflowProgress(sessionId, String(taskId));
+  }
+
+  function syncWorkflow(snapshot: SessionSnapshot): void {
+    const latest = [...snapshot.tasks]
+      .reverse()
+      .find((task) => task.kind === ISSUE_TO_PR_TASK_KIND);
+    if (latest === undefined) return;
+    trackWorkflowTask(snapshot.session.id, latest.id, 'Restoring issue workflow status…');
+  }
+
+  function startWorkflowProgress(sessionId: SessionId, taskId: string): void {
+    workflowPoll?.abort();
+    const controller = new AbortController();
+    workflowPoll = controller;
+    void pollWorkflowProgress(sessionId, taskId, controller.signal);
+  }
+
+  async function pollWorkflowProgress(
+    sessionId: SessionId,
+    taskId: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    let delay = 1_000;
+    while (
+      !signal.aborted &&
+      activeSessionId === sessionId &&
+      activeWorkflowSessionId === sessionId &&
+      String(activeWorkflowTaskId) === taskId
+    ) {
+      try {
+        const progress = await request<IssueToPrProgressResponse>(
+          `/api/sessions/${encodeURIComponent(sessionId)}/tasks/${encodeURIComponent(taskId)}/approval`,
+          { signal },
+        );
+        if (signal.aborted) return;
+        renderWorkflowProgress(progress);
+        if (workflowIsTerminal) return;
+      } catch (error) {
+        if (signal.aborted) return;
+        setWorkflowStatus(`${errorMessage(error)} Rechecking workflow…`);
+      }
+      await wait(delay, signal);
+      delay = Math.min(delay * 2, 5_000);
+    }
+  }
+
+  function renderWorkflowProgress(progress: IssueToPrProgressResponse): void {
+    workflowIsTerminal = ['completed', 'rejected', 'failed', 'aborted'].includes(progress.status);
+    workflowDecisionInFlight = progress.status === 'pending' && workflowDecisionInFlight;
+    startWorkflowElement.disabled = activeSessionId === undefined || !workflowIsTerminal;
+    const isWorking = progress.status === 'preparing' || progress.status === 'approved';
+    workflowProgressLabelElement.hidden = !isWorking;
+    workflowProgressElement.hidden = !isWorking;
+    workflowActionsElement.hidden = progress.status !== 'pending';
+    approveWorkflowElement.disabled = workflowDecisionInFlight;
+    rejectWorkflowElement.disabled = workflowDecisionInFlight;
+    workflowResultElement.hidden = progress.pullRequestUrl === undefined;
+    workflowPullRequestUrlElement.textContent = progress.pullRequestUrl ?? '';
+
+    const messages: Record<IssueToPrProgressResponse['status'], string> = {
+      preparing: 'Checking issue and preparing work…',
+      pending: workflowDecisionInFlight
+        ? 'Decision submitted; waiting for workflow update…'
+        : 'Waiting for your approval.',
+      approved: 'Approval recorded; draft PR creation is in progress…',
+      rejected: 'Issue workflow rejected.',
+      completed: 'Draft PR created.',
+      failed: 'Workflow failed before completion. No PR was reported.',
+      aborted: 'Issue workflow cancelled.',
+    };
+    setWorkflowStatus(messages[progress.status]);
+  }
+
+  async function decideWorkflow(decision: IssueToPrApprovalDecision): Promise<void> {
+    const sessionId = activeWorkflowSessionId;
+    const taskId = activeWorkflowTaskId;
+    if (sessionId === undefined || taskId === undefined || workflowDecisionInFlight) return;
+
+    workflowDecisionInFlight = true;
+    approveWorkflowElement.disabled = true;
+    rejectWorkflowElement.disabled = true;
+    setWorkflowStatus(decision === 'approved' ? 'Approval submitted…' : 'Rejection submitted…');
+    try {
+      await request<TaskResponse>(
+        `/api/sessions/${encodeURIComponent(sessionId)}/tasks/${taskId}/approval`,
+        { method: 'POST', body: JSON.stringify({ decision }) },
+      );
+    } catch (error) {
+      workflowDecisionInFlight = false;
+      approveWorkflowElement.disabled = false;
+      rejectWorkflowElement.disabled = false;
+      setWorkflowStatus(errorMessage(error));
+    }
   }
 
   function renderSessions(
@@ -133,7 +368,9 @@ export function connectInspector(document: Document): void {
 
   async function connectSession(id: SessionId): Promise<void> {
     activeStream?.abort();
+    resetWorkflow('Loading issue workflow state…');
     activeSessionId = id;
+    startWorkflowElement.disabled = false;
     lastEventIds.delete(id);
     activeStream = new AbortController();
     clearSnapshot();
@@ -188,6 +425,7 @@ export function connectInspector(document: Document): void {
   function clearSnapshot(): void {
     currentSnapshot = undefined;
     statusElement.textContent = '—';
+    sessionIdElement.textContent = 'Choose a session to inspect its durable task summaries.';
     taskListElement.replaceChildren(emptyTaskRow('Waiting for a session snapshot.'));
   }
 
@@ -200,6 +438,7 @@ export function connectInspector(document: Document): void {
         ? [emptyTaskRow('No tasks in this session.')]
         : snapshot.tasks.map(taskRow)),
     );
+    syncWorkflow(snapshot);
     setMessage('Session state is current.');
   }
 

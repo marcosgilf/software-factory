@@ -76,11 +76,25 @@ import { site } from '../lib/site.js';
         cursor: not-allowed;
         opacity: 0.55;
       }
-      .session-controls {
+      .session-controls,
+      .workflow-controls {
         display: grid;
         grid-template-columns: 1fr auto;
         gap: 1rem;
         align-items: end;
+      }
+      .workflow-progress {
+        width: 100%;
+        accent-color: #203852;
+      }
+      .workflow-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+      .workflow-actions .reject {
+        border-color: #6b2730;
+        background: #6b2730;
       }
       .session-heading {
         display: flex;
@@ -124,7 +138,8 @@ import { site } from '../lib/site.js';
           padding-top: 2rem;
         }
         .connection-grid,
-        .session-controls {
+        .session-controls,
+        .workflow-controls {
           grid-template-columns: 1fr;
         }
       }
@@ -162,6 +177,39 @@ import { site } from '../lib/site.js';
           </label>
           <button id="create-session" type="button" disabled>Create session</button>
         </div>
+      </section>
+
+      <section class="panel" aria-labelledby="workflow-title">
+        <h2 id="workflow-title">Issue to draft PR</h2>
+        <p id="workflow-help" class="muted">
+          Start an issue in the API's configured mode. The browser sends no GitHub credential.
+        </p>
+        <form id="issue-to-pr-form" class="workflow-controls" action="" method="post">
+          <label for="issue-number">
+            GitHub issue number
+            <input
+              id="issue-number"
+              name="issueNumber"
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              required
+              aria-describedby="workflow-help"
+            />
+          </label>
+          <button id="start-issue-to-pr" type="submit" disabled>Start issue workflow</button>
+        </form>
+        <label id="workflow-progress-label" for="workflow-progress" hidden>Issue workflow progress</label>
+        <progress id="workflow-progress" class="workflow-progress" hidden></progress>
+        <p id="workflow-status" class="muted" role="status" aria-live="polite" aria-atomic="true">
+          Connect to the device API and choose a session to start.
+        </p>
+        <div id="workflow-actions" class="workflow-actions" hidden>
+          <button id="approve-issue-to-pr" type="button">Approve and create draft PR</button>
+          <button id="reject-issue-to-pr" class="reject" type="button">Reject issue workflow</button>
+        </div>
+        <p id="workflow-result" class="muted" hidden>Draft PR URL: <code id="workflow-pr-url"></code></p>
       </section>
 
       <section class="panel" aria-labelledby="tasks-title">

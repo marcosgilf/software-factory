@@ -111,6 +111,17 @@ send the bearer token over non-loopback HTTP. The API allows browser origins `ht
 and `http://127.0.0.1:4321` by default; set `FACTORY_ALLOWED_ORIGINS` to a comma-separated list
 when serving the inspector from a different trusted origin.
 
+## Browser issue-to-PR test
+
+Run `pnpm dev:web` in a second terminal and open `http://localhost:4321/`. Connect with the device
+API token, create or select a session, enter an issue number, and start workflow. Browser sends only
+the issue number and device token; it never receives the GitHub PAT.
+
+In mock mode, use issue `42` to reach approval and the fake PR result. Approve or reject from page.
+In GitHub mode, use an issue in the allowlisted repository: an issue without `factory/approved` is
+rejected by the real gate. An eligible issue fails before workspace execution in PR A. It creates no
+branch or PR until PR B adds the executor.
+
 ## Local mock issue-to-PR test
 
 Start Docker and load the pinned image once, then start the API with a local-only token and mock
@@ -144,3 +155,15 @@ curl -fsS "$API/api/sessions/$SESSION/tasks/$TASK/approval" -H "Authorization: B
 
 Use issue `43` to verify the required `factory/approved` label gate. This mock is in memory; use
 workflow crash-recovery tests to verify replay across a process restart.
+
+### Test from the inspector
+
+Start the web app in a second terminal with `pnpm dev:web`, then open `http://localhost:4321/`.
+Connect to `http://127.0.0.1:3000` with the device token, create or select a session, enter issue
+`42`, and start the workflow. Mock mode should show approval controls and a fake PR URL after
+approval. Issue `43` should show the label rejection.
+
+With `FACTORY_ISSUE_TO_PR_MODE=github` and a scoped PAT injected into the API process, the same
+form reads issues from the configured repository. Unlabeled or closed issues are rejected. An
+eligible issue fails before workspace execution in this slice; no branch or PR is created until the
+real executor is added.

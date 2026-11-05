@@ -40,8 +40,10 @@
 - [x] Local mock HTTP slice with Docker-isolated deterministic work, approval, and recovery tests.
 - [x] Scoped backend-only GitHub adapter with validated environment and repository allowlist.
 - [x] Restricted branch publisher with replay reconciliation tests.
-- [ ] Approval bound to actual changes and remote write reconciliation.
-- [ ] GitHub issue -> isolated workspace -> tests -> PR workflow.
+- [x] Browser start/progress/approval controls for mock QA and the real issue gate.
+- [ ] First real workspace slice: one bounded change, isolated test, and immutable commit evidence.
+- [ ] Bind approval to that evidence, then publish/reconcile one branch and draft PR.
+- [ ] Verify the complete browser flow against a dedicated test repository.
 
 **Exit:** human-approved PR created once despite simulated restart at critical points.
 
