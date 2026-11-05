@@ -111,11 +111,195 @@ describe('inspector session connections', () => {
       vi.unstubAllGlobals();
     }
   }, 10_000);
+
+  it('starts and approves an issue workflow from the browser inspector', async () => {
+    const document = new FakeDocument();
+    const requests: {
+      method: string;
+      path: string;
+      authorization: string | null;
+      body?: string;
+    }[] = [];
+    let approvalSubmitted = false;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const method = init?.method ?? 'GET';
+        requests.push({
+          method,
+          path: url.pathname,
+          authorization: new Headers(init?.headers).get('Authorization'),
+          ...(init?.body === undefined ? {} : { body: String(init.body) }),
+        });
+        if (url.pathname === '/api/sessions') {
+          return jsonResponse({
+            sessions: [{ id: SESSION_A, status: 'idle', taskCount: 0, activeTaskCount: 0 }],
+          });
+        }
+        if (url.pathname.endsWith('/events')) {
+          const event = sessionEvent(SESSION_A, 1);
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+                ),
+              );
+              const close = () => {
+                try {
+                  controller.close();
+                } catch {
+                  // The stream may already be closed.
+                }
+              };
+              if (init?.signal?.aborted) close();
+              else init?.signal?.addEventListener('abort', close, { once: true });
+            },
+          });
+          return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } });
+        }
+        if (url.pathname.endsWith('/workflows/issue-to-pr') && method === 'POST') {
+          return jsonResponse(
+            {
+              task: { id: 7, kind: 'factory.workflow.issue-to-pr', status: 'running' },
+            },
+            202,
+          );
+        }
+        if (url.pathname.endsWith('/tasks/7/approval') && method === 'POST') {
+          approvalSubmitted = true;
+          return jsonResponse(
+            { task: { id: 7, kind: 'factory.workflow.issue-to-pr', status: 'running' } },
+            202,
+          );
+        }
+        if (url.pathname.endsWith('/tasks/7/approval')) {
+          return jsonResponse(
+            approvalSubmitted
+              ? {
+                  status: 'completed',
+                  pullRequestUrl: 'https://github.com/factory-mock/demo/pull/1',
+                }
+              : { status: 'pending' },
+          );
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+    connectInspector(document as unknown as Document);
+
+    try {
+      await Promise.resolve(
+        document.get('connection-form').dispatch('submit', new Event('submit')),
+      );
+      await waitFor(() => document.get('start-issue-to-pr').disabled === false);
+      document.get('issue-number').value = '42';
+      await Promise.resolve(
+        document.get('issue-to-pr-form').dispatch('submit', new Event('submit')),
+      );
+      await waitFor(() => document.get('workflow-actions').hidden === false);
+      expect(document.get('workflow-status').textContent).toBe('Waiting for your approval.');
+
+      document.get('approve-issue-to-pr').dispatch('click', new Event('click'));
+      await waitFor(() => document.get('workflow-status').textContent === 'Draft PR created.');
+      expect(document.get('workflow-result').hidden).toBe(false);
+      expect(document.get('workflow-pr-url').textContent).toBe(
+        'https://github.com/factory-mock/demo/pull/1',
+      );
+      const start = requests.find(({ path }) => path.endsWith('/workflows/issue-to-pr'));
+      expect(JSON.parse(start?.body ?? '{}')).toEqual({ issueNumber: 42 });
+      expect(
+        requests.every(({ authorization }) => authorization === 'Bearer test-device-token'),
+      ).toBe(true);
+    } finally {
+      document.get('api-url').value = 'not a URL';
+      await Promise.resolve(
+        document.get('connection-form').dispatch('submit', new Event('submit')),
+      );
+      vi.unstubAllGlobals();
+    }
+  }, 10_000);
+
+  it('shows a real-mode eligibility rejection without a PR action', async () => {
+    const document = new FakeDocument();
+    const requests: { method: string; path: string; body?: string }[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        const method = init?.method ?? 'GET';
+        requests.push({
+          method,
+          path: url.pathname,
+          ...(init?.body === undefined ? {} : { body: String(init.body) }),
+        });
+        if (url.pathname === '/api/sessions') {
+          return jsonResponse({
+            sessions: [{ id: SESSION_A, status: 'idle', taskCount: 0, activeTaskCount: 0 }],
+          });
+        }
+        if (url.pathname.endsWith('/events')) {
+          const event = sessionEvent(SESSION_A, 1);
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+                ),
+              );
+              init?.signal?.addEventListener('abort', () => controller.close(), { once: true });
+            },
+          });
+          return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } });
+        }
+        if (url.pathname.endsWith('/workflows/issue-to-pr') && method === 'POST') {
+          return jsonResponse(
+            {
+              task: { id: 8, kind: 'factory.workflow.issue-to-pr', status: 'running' },
+            },
+            202,
+          );
+        }
+        if (url.pathname.endsWith('/tasks/8/approval')) return jsonResponse({ status: 'rejected' });
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+    connectInspector(document as unknown as Document);
+
+    try {
+      await Promise.resolve(
+        document.get('connection-form').dispatch('submit', new Event('submit')),
+      );
+      await waitFor(() => document.get('start-issue-to-pr').disabled === false);
+      document.get('issue-number').value = '43';
+      await Promise.resolve(
+        document.get('issue-to-pr-form').dispatch('submit', new Event('submit')),
+      );
+      await waitFor(
+        () => document.get('workflow-status').textContent === 'Issue workflow rejected.',
+      );
+
+      expect(document.get('workflow-actions').hidden).toBe(true);
+      expect(document.get('workflow-result').hidden).toBe(true);
+      const start = requests.find(({ path }) => path.endsWith('/workflows/issue-to-pr'));
+      expect(JSON.parse(start?.body ?? '{}')).toEqual({ issueNumber: 43 });
+    } finally {
+      document.get('api-url').value = 'not a URL';
+      await Promise.resolve(
+        document.get('connection-form').dispatch('submit', new Event('submit')),
+      );
+      vi.unstubAllGlobals();
+    }
+  }, 10_000);
 });
 
 class FakeElement {
   value = '';
   disabled = false;
+  hidden = false;
   textContent = '';
   className = '';
   colSpan = 1;
@@ -139,6 +323,12 @@ class FakeElement {
   append(...children: Node[]): void {
     this.children.push(...(children as unknown as FakeElement[]));
   }
+
+  setCustomValidity(_message: string): void {}
+
+  reportValidity(): boolean {
+    return true;
+  }
 }
 
 class FakeDocument {
@@ -156,11 +346,27 @@ class FakeDocument {
       'session-id',
       'session-status',
       'task-list',
+      'issue-to-pr-form',
+      'issue-number',
+      'start-issue-to-pr',
+      'workflow-progress-label',
+      'workflow-progress',
+      'workflow-status',
+      'workflow-actions',
+      'approve-issue-to-pr',
+      'reject-issue-to-pr',
+      'workflow-result',
+      'workflow-pr-url',
     ]) {
       this.#elements.set(id, new FakeElement());
     }
     this.get('api-url').value = 'http://127.0.0.1:3000';
     this.get('api-token').value = 'test-device-token';
+    this.get('start-issue-to-pr').disabled = true;
+    this.get('workflow-progress-label').hidden = true;
+    this.get('workflow-progress').hidden = true;
+    this.get('workflow-actions').hidden = true;
+    this.get('workflow-result').hidden = true;
   }
 
   querySelector<E extends Element = Element>(selector: string): E | null {
@@ -174,6 +380,13 @@ class FakeDocument {
   get(id: string): FakeElement {
     return this.#elements.get(id)!;
   }
+}
+
+function jsonResponse(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 function sessionEvent(sessionId: SessionId, sequence: number): SessionEvent {
