@@ -262,12 +262,14 @@ async function waitForApproval(
           return;
         }
         runtime.signal.addEventListener('abort', onAbort, { once: true });
-        watch.start(async (value) => {
-          if (value !== null && value.status !== 'pending') resolve(value.status);
+        watch.start(async (call) => {
+          if (call.kind === 'value' && call.value !== null && call.value.status !== 'pending') {
+            resolve(call.value.status);
+          }
         });
       }),
       watch.closed.then((end) => {
-        if (end.reason !== 'stopped' && !runtime.signal.aborted) {
+        if (end.kind !== 'stopped' && !runtime.signal.aborted) {
           throw new Error('Issue-to-PR approval watch ended before a decision.');
         }
         return new Promise<IssueToPrApprovalStatus>(() => undefined);

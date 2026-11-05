@@ -55,6 +55,7 @@ describe('Docker mock workspace executor', () => {
         HOME: '/home/factory',
         DOCKER_HOST: 'unix:///var/run/docker.sock',
         FACTORY_API_TOKEN: 'device-token',
+        FACTORY_GITHUB_TOKEN: 'backend-github-token',
         GITHUB_TOKEN: 'github-token',
         GH_TOKEN: 'github-token',
       }),
